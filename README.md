@@ -1,7 +1,7 @@
 
-  # Nuevo proyecto en blanco
+  # Bam Royalties System
 
-  This is a code bundle for Nuevo proyecto en blanco. The original project is available at https://www.figma.com/design/gQYYE23x6VdOYvDcRTvkn6/Nuevo-proyecto-en-blanco.
+  This is a code bundle for Bam Royalties System. The original project is available at https://www.figma.com/design/gQYYE23x6VdOYvDcRTvkn6/Bam-Royalties-System.
 
   ## Running the code
 
