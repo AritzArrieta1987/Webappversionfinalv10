@@ -26,10 +26,16 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showChangeEmail, setShowChangeEmail] = useState(false);
+  const [showCreateArtistAccess, setShowCreateArtistAccess] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [artistEmail, setArtistEmail] = useState('');
+  const [artistPassword, setArtistPassword] = useState('');
+  const [artistName, setArtistName] = useState('');
+  const [isCreatingAccess, setIsCreatingAccess] = useState(false);
+  const [createAccessSuccess, setCreateAccessSuccess] = useState(false);
 
   // Tabs del menú
   const tabs = [
@@ -91,6 +97,59 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
     setShowChangeEmail(false);
     setShowSettingsMenu(false);
     setNewEmail('');
+  };
+
+  // Función para crear acceso de artista
+  const handleCreateArtistAccess = async () => {
+    if (!artistEmail || !artistEmail.includes('@')) {
+      alert('Por favor ingresa un email válido');
+      return;
+    }
+    if (!artistPassword || artistPassword.length < 6) {
+      alert('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    if (!artistName || artistName.trim() === '') {
+      alert('Por favor ingresa el nombre del artista');
+      return;
+    }
+
+    setIsCreatingAccess(true);
+
+    try {
+      // TODO: Implementar llamada al backend real
+      // await fetch('/api/auth/create-artist', {
+      //   method: 'POST',
+      //   headers: { 
+      //     'Content-Type': 'application/json',
+      //     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+      //   },
+      //   body: JSON.stringify({ 
+      //     email: artistEmail, 
+      //     password: artistPassword,
+      //     name: artistName 
+      //   })
+      // });
+
+      // Simular envío de email
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      setCreateAccessSuccess(true);
+    } catch (error) {
+      alert('Error al crear acceso de artista');
+      console.error(error);
+    } finally {
+      setIsCreatingAccess(false);
+    }
+  };
+
+  const closeCreateArtistModal = () => {
+    setShowCreateArtistAccess(false);
+    setArtistEmail('');
+    setArtistPassword('');
+    setArtistName('');
+    setCreateAccessSuccess(false);
+    setShowSettingsMenu(false);
   };
 
   // Detectar mobile
@@ -738,6 +797,38 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
                 <span>Cambiar correo electrónico</span>
               </button>
 
+              <button
+                onClick={() => {
+                  setShowSettingsMenu(false);
+                  setShowCreateArtistAccess(true);
+                }}
+                style={{
+                  padding: '16px 20px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(201, 165, 116, 0.3)',
+                  background: 'rgba(42, 63, 63, 0.4)',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(42, 63, 63, 0.6)';
+                  e.currentTarget.style.borderColor = 'rgba(201, 165, 116, 0.5)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(42, 63, 63, 0.4)';
+                  e.currentTarget.style.borderColor = 'rgba(201, 165, 116, 0.3)';
+                }}
+              >
+                <UserCog size={18} color="#c9a574" />
+                <span>Crear Acceso Artista</span>
+              </button>
+
               {/* Separador */}
               <div style={{
                 height: '1px',
@@ -1089,6 +1180,175 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
                 Cambiar email
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de creación de acceso de artista */}
+      {showCreateArtistAccess && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(30, 47, 47, 0.98) 0%, rgba(20, 35, 35, 0.98) 100%)',
+            border: '1px solid rgba(251, 146, 60, 0.3)',
+            borderRadius: '20px',
+            padding: isMobile ? '24px' : '32px',
+            maxWidth: '500px',
+            width: '100%',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                background: 'rgba(251, 146, 60, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px'
+              }}>
+                <UserCog size={32} color="#fb923c" />
+              </div>
+              <h3 style={{ fontSize: '24px', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
+                Crear acceso de artista
+              </h3>
+              <p style={{ fontSize: '14px', color: '#AFB3B7', lineHeight: '1.6' }}>
+                Ingresa los detalles del artista
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <input
+                type="email"
+                placeholder="Email del artista"
+                value={artistEmail}
+                onChange={(e) => setArtistEmail(e.target.value)}
+                style={{
+                  padding: '14px 24px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(201, 165, 116, 0.3)',
+                  background: 'rgba(42, 63, 63, 0.4)',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+              />
+              <input
+                type="password"
+                placeholder="Contraseña del artista"
+                value={artistPassword}
+                onChange={(e) => setArtistPassword(e.target.value)}
+                style={{
+                  padding: '14px 24px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(201, 165, 116, 0.3)',
+                  background: 'rgba(42, 63, 63, 0.4)',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Nombre del artista"
+                value={artistName}
+                onChange={(e) => setArtistName(e.target.value)}
+                style={{
+                  padding: '14px 24px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(201, 165, 116, 0.3)',
+                  background: 'rgba(42, 63, 63, 0.4)',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button
+                onClick={closeCreateArtistModal}
+                style={{
+                  flex: 1,
+                  padding: '14px 24px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(201, 165, 116, 0.3)',
+                  background: 'rgba(42, 63, 63, 0.4)',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(42, 63, 63, 0.6)';
+                  e.currentTarget.style.borderColor = 'rgba(201, 165, 116, 0.5)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(42, 63, 63, 0.4)';
+                  e.currentTarget.style.borderColor = 'rgba(201, 165, 116, 0.3)';
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateArtistAccess}
+                style={{
+                  flex: 1,
+                  padding: '14px 24px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(251, 146, 60, 0.5)',
+                  background: 'rgba(251, 146, 60, 0.2)',
+                  color: '#fb923c',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(251, 146, 60, 0.3)';
+                  e.currentTarget.style.borderColor = 'rgba(251, 146, 60, 0.7)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(251, 146, 60, 0.2)';
+                  e.currentTarget.style.borderColor = 'rgba(251, 146, 60, 0.5)';
+                }}
+              >
+                {isCreatingAccess ? 'Creando...' : 'Crear acceso'}
+              </button>
+            </div>
+
+            {createAccessSuccess && (
+              <div style={{
+                marginTop: '24px',
+                padding: '16px 20px',
+                borderRadius: '12px',
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                color: '#22c55e',
+                fontSize: '14px',
+                fontWeight: '600',
+                textAlign: 'center'
+              }}>
+                Acceso de artista creado exitososamente
+              </div>
+            )}
           </div>
         </div>
       )}

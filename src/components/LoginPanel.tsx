@@ -29,6 +29,11 @@ export default function LoginPanel({ onLoginSuccess }: LoginPanelProps) {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState('');
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoverySuccess, setRecoverySuccess] = useState(false);
+  const [recoveryError, setRecoveryError] = useState('');
+  const [isRecoveryLoading, setIsRecoveryLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,48 +42,6 @@ export default function LoginPanel({ onLoginSuccess }: LoginPanelProps) {
     setError('');
 
     try {
-      // MODO DESARROLLO: Si no podemos conectar al backend, usar credenciales locales
-      const isDevelopment = window.location.hostname === 'localhost' || 
-                           window.location.hostname.includes('figma') ||
-                           window.location.hostname.includes('preview');
-      
-      if (isDevelopment) {
-        // Información de debug solo en desarrollo
-        setDebugInfo('🔧 Modo desarrollo - Usando autenticación local');
-        
-        // Credenciales de desarrollo
-        const devCredentials = {
-          admin: { email: 'admin@bigartist.es', password: 'admin123', name: 'Admin BigArtist', type: 'admin' },
-          artist: { email: 'artist@bigartist.es', password: 'artist123', name: 'Demo Artist', type: 'artist' }
-        };
-        
-        // Validar credenciales
-        const user = Object.values(devCredentials).find(
-          cred => cred.email === email && cred.password === password
-        );
-        
-        if (user) {
-          setDebugInfo('✅ Login exitoso!');
-          
-          localStorage.setItem('authToken', 'dev-token-' + Date.now());
-          localStorage.setItem('user', JSON.stringify({
-            id: user.type === 'admin' ? 1 : 2,
-            email: user.email,
-            name: user.name,
-            type: user.type
-          }));
-          
-          onLoginSuccess();
-        } else {
-          throw new Error('Usuario o contraseña incorrectos');
-        }
-        
-        setIsLoading(false);
-        return;
-      }
-      
-      // MODO PRODUCCIÓN: Conectar al backend real (sin mostrar debug info)
-      
       // Llamada al backend para validar credenciales
       const response = await login(email, password);
 
@@ -97,7 +60,7 @@ export default function LoginPanel({ onLoginSuccess }: LoginPanelProps) {
         onLoginSuccess();
       } else {
         // Credenciales incorrectas
-        throw new Error('Usuario o contraseña incorrectos');
+        throw new Error(response.message || 'Usuario o contraseña incorrectos');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error al conectar con el servidor';
@@ -106,6 +69,45 @@ export default function LoginPanel({ onLoginSuccess }: LoginPanelProps) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsRecoveryLoading(true);
+    setRecoveryError('');
+    setRecoverySuccess(false);
+
+    try {
+      // Validar email
+      if (!recoveryEmail || !recoveryEmail.includes('@')) {
+        throw new Error('Por favor ingresa un email válido');
+      }
+
+      // Simular llamada al backend
+      // En producción, aquí iría la llamada real al endpoint de recuperación
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // TODO: Implementar endpoint real en backend
+      // await fetch('/api/auth/forgot-password', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ email: recoveryEmail })
+      // });
+
+      setRecoverySuccess(true);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al enviar el correo';
+      setRecoveryError(errorMessage);
+    } finally {
+      setIsRecoveryLoading(false);
+    }
+  };
+
+  const closeRecoveryModal = () => {
+    setShowRecoveryModal(false);
+    setRecoveryEmail('');
+    setRecoverySuccess(false);
+    setRecoveryError('');
   };
 
   return (
@@ -398,6 +400,35 @@ export default function LoginPanel({ onLoginSuccess }: LoginPanelProps) {
               {isLoading ? 'Iniciando...' : 'Iniciar Sesión'}
             </button>
 
+            {/* Enlace de recuperar contraseña */}
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <button
+                type="button"
+                onClick={() => setShowRecoveryModal(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#c9a574',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  transition: 'all 0.2s ease',
+                  padding: '8px'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = '#d4b589';
+                  e.currentTarget.style.textDecoration = 'underline';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = '#c9a574';
+                  e.currentTarget.style.textDecoration = 'none';
+                }}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+
             {/* Debug Info */}
             {debugInfo && (
               <div style={{
@@ -435,6 +466,261 @@ export default function LoginPanel({ onLoginSuccess }: LoginPanelProps) {
           </div>
         </div>
       </div>
+
+      {/* Modal de Recuperación de Contraseña */}
+      {showRecoveryModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.8)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(30, 47, 47, 0.98) 0%, rgba(20, 35, 35, 0.98) 100%)',
+            border: '1px solid rgba(201, 165, 116, 0.3)',
+            borderRadius: '20px',
+            padding: '32px',
+            maxWidth: '500px',
+            width: '100%',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)'
+          }}>
+            {!recoverySuccess ? (
+              <>
+                {/* Header */}
+                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                  <div style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    background: 'rgba(201, 165, 116, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 16px',
+                    fontSize: '32px'
+                  }}>
+                    🔑
+                  </div>
+                  <h3 style={{ 
+                    fontSize: '24px', 
+                    fontWeight: '700', 
+                    color: '#ffffff', 
+                    marginBottom: '8px' 
+                  }}>
+                    Recuperar Contraseña
+                  </h3>
+                  <p style={{ 
+                    fontSize: '14px', 
+                    color: '#AFB3B7', 
+                    lineHeight: '1.6' 
+                  }}>
+                    Ingresa tu email y te enviaremos instrucciones para restablecer tu contraseña
+                  </p>
+                </div>
+
+                {/* Formulario */}
+                <form onSubmit={handleRecoverySubmit}>
+                  {recoveryError && (
+                    <div style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid #ef4444',
+                      color: '#fca5a5',
+                      padding: '12px 16px',
+                      borderRadius: '10px',
+                      fontSize: '14px',
+                      marginBottom: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      <span style={{ fontSize: '18px' }}>⚠️</span>
+                      {recoveryError}
+                    </div>
+                  )}
+
+                  <div style={{ marginBottom: '24px' }}>
+                    <label style={{
+                      display: 'block',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#AFB3B7',
+                      marginBottom: '10px'
+                    }}>
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={recoveryEmail}
+                      onChange={(e) => setRecoveryEmail(e.target.value)}
+                      placeholder="tu@email.com"
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '14px 16px',
+                        fontSize: '15px',
+                        color: '#ffffff',
+                        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                        border: '2px solid rgba(201, 165, 116, 0.3)',
+                        borderRadius: '10px',
+                        outline: 'none',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = '#c9a574';
+                        e.target.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = 'rgba(201, 165, 116, 0.3)';
+                        e.target.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={closeRecoveryModal}
+                      disabled={isRecoveryLoading}
+                      style={{
+                        flex: 1,
+                        padding: '14px 24px',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(201, 165, 116, 0.3)',
+                        background: 'rgba(42, 63, 63, 0.4)',
+                        color: '#ffffff',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: isRecoveryLoading ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.3s ease',
+                        opacity: isRecoveryLoading ? 0.5 : 1
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isRecoveryLoading) {
+                          e.currentTarget.style.background = 'rgba(42, 63, 63, 0.6)';
+                          e.currentTarget.style.borderColor = 'rgba(201, 165, 116, 0.5)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isRecoveryLoading) {
+                          e.currentTarget.style.background = 'rgba(42, 63, 63, 0.4)';
+                          e.currentTarget.style.borderColor = 'rgba(201, 165, 116, 0.3)';
+                        }
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isRecoveryLoading}
+                      style={{
+                        flex: 1,
+                        padding: '14px 24px',
+                        borderRadius: '12px',
+                        border: 'none',
+                        background: isRecoveryLoading 
+                          ? 'rgba(201, 165, 116, 0.5)' 
+                          : 'linear-gradient(135deg, #c9a574 0%, #d4b589 100%)',
+                        color: '#0D1F23',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: isRecoveryLoading ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.3s ease',
+                        boxShadow: '0 4px 12px rgba(201, 165, 116, 0.3)',
+                        opacity: isRecoveryLoading ? 0.6 : 1
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isRecoveryLoading) {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 6px 20px rgba(201, 165, 116, 0.5)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isRecoveryLoading) {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(201, 165, 116, 0.3)';
+                        }
+                      }}
+                    >
+                      {isRecoveryLoading ? 'Enviando...' : 'Enviar'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <>
+                {/* Mensaje de éxito */}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '50%',
+                    background: 'rgba(34, 197, 94, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 20px',
+                    fontSize: '40px'
+                  }}>
+                    ✅
+                  </div>
+                  <h3 style={{ 
+                    fontSize: '24px', 
+                    fontWeight: '700', 
+                    color: '#ffffff', 
+                    marginBottom: '12px' 
+                  }}>
+                    ¡Correo enviado!
+                  </h3>
+                  <p style={{ 
+                    fontSize: '15px', 
+                    color: '#AFB3B7', 
+                    lineHeight: '1.8',
+                    marginBottom: '24px' 
+                  }}>
+                    Hemos enviado las instrucciones de recuperación a <strong style={{ color: '#c9a574' }}>{recoveryEmail}</strong>
+                    <br /><br />
+                    Revisa tu bandeja de entrada y sigue los pasos indicados.
+                  </p>
+                  <button
+                    onClick={closeRecoveryModal}
+                    style={{
+                      width: '100%',
+                      padding: '14px 24px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #c9a574 0%, #d4b589 100%)',
+                      color: '#0D1F23',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 4px 12px rgba(201, 165, 116, 0.3)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 6px 20px rgba(201, 165, 116, 0.5)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(201, 165, 116, 0.3)';
+                    }}
+                  >
+                    Entendido
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Estilos de animación */}
       <style>{`

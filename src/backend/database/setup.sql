@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS contracts (
 -- Usuario admin (password: admin123)
 -- Hash generado con bcrypt, rounds=10
 INSERT INTO users (email, password, name, type) VALUES
-('admin@bigartist.es', '$2b$10$rK8F5jXcZOXQxjhDQVQOXuqYZVYX8LqWvNcZXvXcZOXQxjhDQVQOXu', 'Admin', 'admin')
+('admin@bigartist.es', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW', 'Admin BigArtist', 'admin')
 ON DUPLICATE KEY UPDATE email=email;
 
 -- Artista de prueba
@@ -172,7 +172,7 @@ ON DUPLICATE KEY UPDATE name=name;
 
 -- Usuario artista (password: artist123)
 INSERT INTO users (email, password, name, type) VALUES
-('artista@demo.com', '$2b$10$rK8F5jXcZOXQxjhDQVQOXuqYZVYX8LqWvNcZXvXcZOXQxjhDQVQOXu', 'Artista Demo', 'artist')
+('artista@demo.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Artista Demo', 'artist')
 ON DUPLICATE KEY UPDATE email=email;
 
 -- ==================== VERIFICACIÓN ====================

@@ -123,6 +123,15 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
+    // Validación adicional: Solo admin@bigartist.es puede ser admin
+    if (user.type === 'admin' && email !== 'admin@bigartist.es') {
+      console.log('⚠️ Intento de acceso admin desde email no autorizado:', email);
+      return res.status(403).json({
+        success: false,
+        message: 'Acceso no autorizado'
+      });
+    }
+
     // Generar token JWT
     const token = jwt.sign(
       {
