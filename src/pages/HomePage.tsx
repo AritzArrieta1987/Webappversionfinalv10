@@ -165,31 +165,31 @@ export function HomePage() {
       value: `${totalRoyalties.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`,
       icon: DollarSign,
       color: '#c9a574',
-      bgColor: 'rgba(201, 165, 116, 0.1)',
+      bgColor: 'rgba(42, 63, 63, 0.3)',
       subtitle: 'Ingresos totales del CSV'
     },
     {
       title: 'Total Artista',
       value: `${totalArtista.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`,
       icon: TrendingUp,
-      color: '#4ade80',
-      bgColor: 'rgba(74, 222, 128, 0.1)',
+      color: '#c9a574',
+      bgColor: 'rgba(42, 63, 63, 0.3)',
       subtitle: 'Según contratos individuales'
     },
     {
       title: 'Total BAM',
       value: `${totalBAM.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`,
       icon: Calendar,
-      color: '#fb923c',
-      bgColor: 'rgba(251, 146, 60, 0.1)',
+      color: '#c9a574',
+      bgColor: 'rgba(42, 63, 63, 0.3)',
       subtitle: 'Parte de la compañía'
     },
     {
       title: 'Otros Trabajos',
       value: `${totalWorkBilling.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`,
       icon: Users,
-      color: '#8b5cf6',
-      bgColor: 'rgba(139, 92, 246, 0.1)',
+      color: '#c9a574',
+      bgColor: 'rgba(42, 63, 63, 0.3)',
       subtitle: 'Facturación aparte'
     }
   ];

@@ -1,9 +1,25 @@
+#!/bin/bash
+
+echo "🔐 ACTUALIZANDO SISTEMA DE CAMBIO DE CONTRASEÑA"
+echo "==============================================="
+echo ""
+
+# Ir al directorio del frontend
+cd /var/www/bigartist-frontend
+
+# Hacer backup
+echo "📦 Creando backup..."
+cp components/AdminLayout.tsx components/AdminLayout.tsx.backup.$(date +%Y%m%d_%H%M%S)
+
+# Actualizar el archivo AdminLayout.tsx
+echo "📝 Actualizando AdminLayout.tsx..."
+cat > components/AdminLayout.tsx << 'ENDOFFILE'
 import { LayoutDashboard, Users, Music, Wallet, FileText, Upload, Bell, Zap, Menu, X, Home, LogOut, Trash2, Package, Settings, Lock, Mail, UserCog } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router';
 import logoImage from 'figma:asset/aa0296e2522220bcfcda71f86c708cb2cbc616b9.png';
 import backgroundImage from 'figma:asset/0a2a9faa1b59d5fa1e388a2eec5b08498dd7a493.png';
-import { toast } from 'sonner';
+import { toast } from 'sonner@2.0.3';
 
 interface AdminLayoutProps {
   onLogout: () => void;
@@ -89,7 +105,7 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
     }
 
     try {
-      const token = localStorage.getItem('authToken'); // ✅ CORREGIDO: Ahora lee 'authToken'
+      const token = localStorage.getItem('token');
       if (!token) {
         toast.error('No se encontró el token de autenticación');
         return;
@@ -1027,7 +1043,7 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: '600',
-                  cursor: 'pointer',
+                  cursor: 'text',
                   transition: 'all 0.3s ease'
                 }}
               />
@@ -1044,7 +1060,7 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: '600',
-                  cursor: 'pointer',
+                  cursor: 'text',
                   transition: 'all 0.3s ease'
                 }}
               />
@@ -1061,7 +1077,7 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: '600',
-                  cursor: 'pointer',
+                  cursor: 'text',
                   transition: 'all 0.3s ease'
                 }}
               />
@@ -1069,7 +1085,12 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
               <button
-                onClick={() => setShowChangePassword(false)}
+                onClick={() => {
+                  setShowChangePassword(false);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmPassword('');
+                }}
                 style={{
                   flex: 1,
                   padding: '14px 24px',
@@ -1180,7 +1201,7 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: '600',
-                  cursor: 'pointer',
+                  cursor: 'text',
                   transition: 'all 0.3s ease'
                 }}
               />
@@ -1299,7 +1320,7 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: '600',
-                  cursor: 'pointer',
+                  cursor: 'text',
                   transition: 'all 0.3s ease'
                 }}
               />
@@ -1316,7 +1337,7 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: '600',
-                  cursor: 'pointer',
+                  cursor: 'text',
                   transition: 'all 0.3s ease'
                 }}
               />
@@ -1333,7 +1354,7 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: '600',
-                  cursor: 'pointer',
+                  cursor: 'text',
                   transition: 'all 0.3s ease'
                 }}
               />
@@ -1413,3 +1434,46 @@ export default function AdminLayout({ onLogout }: AdminLayoutProps) {
     </div>
   );
 }
+ENDOFFILE
+
+echo "✅ AdminLayout.tsx actualizado"
+echo ""
+
+# Compilar el frontend
+echo "🔨 Compilando frontend..."
+npm run build
+
+if [ $? -ne 0 ]; then
+    echo "❌ Error al compilar. Restaurando backup..."
+    cp components/AdminLayout.tsx.backup.* components/AdminLayout.tsx
+    exit 1
+fi
+
+echo "✅ Compilación exitosa"
+echo ""
+
+# Copiar al directorio de producción
+echo "📂 Desplegando archivos..."
+rm -rf dist.old
+[ -d "dist" ] && mv dist dist.old
+cp -r dist /var/www/bigartist-frontend/ 2>/dev/null || echo "Directorio dist ya está en su lugar"
+
+# Establecer permisos
+chown -R www-data:www-data /var/www/bigartist-frontend/dist
+chmod -R 755 /var/www/bigartist-frontend/dist
+
+echo ""
+echo "=========================================="
+echo "✅ ACTUALIZACIÓN COMPLETADA"
+echo "=========================================="
+echo ""
+echo "🌐 Accede a: https://app.bigartist.es"
+echo "📧 Email: admin@bigartist.es"
+echo "🔐 Password: admin123"
+echo ""
+echo "🧪 Para probar el cambio de contraseña:"
+echo "   1. Haz login"
+echo "   2. Click en el botón de Configuración (⚙️)"
+echo "   3. Selecciona 'Cambiar contraseña'"
+echo "   4. Ingresa: admin123 (actual) + tu nueva contraseña"
+echo ""

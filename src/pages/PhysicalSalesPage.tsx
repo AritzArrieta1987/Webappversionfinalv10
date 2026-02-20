@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { PhysicalSalesSection } from '../components/admin/PhysicalSalesSection';
+import { Package } from 'lucide-react';
 
 export function PhysicalSalesPage() {
   const [isMobile, setIsMobile] = useState(false);
@@ -42,8 +43,12 @@ export function PhysicalSalesPage() {
           fontSize: isMobile ? '28px' : '32px',
           fontWeight: '700',
           color: '#ffffff',
-          marginBottom: '8px'
+          marginBottom: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
         }}>
+          <Package size={32} color="#c9a574" />
           Ventas Físicas
         </h1>
         <p style={{ fontSize: '14px', color: '#AFB3B7' }}>
