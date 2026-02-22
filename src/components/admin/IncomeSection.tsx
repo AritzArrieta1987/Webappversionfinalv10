@@ -15,25 +15,8 @@ export function IncomeSection({ dashboardData, artists, isMobile = false }: Inco
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 5);
 
-  // Calcular totales reales por plataforma desde todos los artistas
-  const platformTotals = new Map<string, number>();
-  
-  artists.forEach(artist => {
-    if (artist.csvData && artist.csvData.platforms) {
-      artist.csvData.platforms.forEach((platform: any) => {
-        const current = platformTotals.get(platform.name) || 0;
-        platformTotals.set(platform.name, current + platform.revenue);
-      });
-    }
-  });
-
-  // Preparar array de plataformas ordenadas por revenue
-  const platformsArray = Array.from(platformTotals.entries())
-    .map(([name, revenue]) => ({ name, revenue }))
-    .sort((a, b) => b.revenue - a.revenue);
-
-  // Calcular el total general
-  const totalPlatformRevenue = platformsArray.reduce((sum, p) => sum + p.revenue, 0);
+  // ✅ ELIMINADO: El código obsoleto de csvData que causaba el error
+  // Ya no usamos artist.csvData - los datos vienen directamente del backend
 
   return (
     <div>
@@ -115,7 +98,7 @@ export function IncomeSection({ dashboardData, artists, isMobile = false }: Inco
                 color: 'rgba(255, 255, 255, 0.7)', 
                 margin: 0 
               }}>
-                {platformsArray.length > 0 ? platformsArray[0].name : 'N/A'}
+                {dashboardData.mainPlatform || 'N/A'}
               </p>
               <h3 style={{ 
                 fontSize: isMobile ? '20px' : '24px', 
@@ -123,7 +106,7 @@ export function IncomeSection({ dashboardData, artists, isMobile = false }: Inco
                 color: '#c9a574', 
                 margin: '4px 0 0 0' 
               }}>
-                €{platformsArray.length > 0 ? platformsArray[0].revenue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'}
+                €{dashboardData.mainPlatformRevenue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
             </div>
           </div>
@@ -132,8 +115,8 @@ export function IncomeSection({ dashboardData, artists, isMobile = false }: Inco
             color: 'rgba(255, 255, 255, 0.6)', 
             margin: 0 
           }}>
-            {platformsArray.length > 0 && totalPlatformRevenue > 0 
-              ? ((platformsArray[0].revenue / totalPlatformRevenue) * 100).toFixed(1) + '% del total'
+            {dashboardData.mainPlatform && dashboardData.totalRevenue > 0 
+              ? ((dashboardData.mainPlatformRevenue / dashboardData.totalRevenue) * 100).toFixed(1) + '% del total'
               : 'Plataforma principal'
             }
           </p>
@@ -355,7 +338,7 @@ export function IncomeSection({ dashboardData, artists, isMobile = false }: Inco
           gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
           gap: isMobile ? '12px' : '16px'
         }}>
-          {platformsArray.map(platform => (
+          {dashboardData.platforms.map(platform => (
             <div
               key={platform.name}
               style={{
@@ -378,7 +361,7 @@ export function IncomeSection({ dashboardData, artists, isMobile = false }: Inco
                   fontWeight: '700', 
                   color: '#c9a574' 
                 }}>
-                  {totalPlatformRevenue > 0 ? ((platform.revenue / totalPlatformRevenue) * 100).toFixed(2) + '%' : '0%'}
+                  {dashboardData.totalRevenue > 0 ? ((platform.revenue / dashboardData.totalRevenue) * 100).toFixed(2) + '%' : '0%'}
                 </span>
               </div>
               <div style={{
@@ -390,7 +373,7 @@ export function IncomeSection({ dashboardData, artists, isMobile = false }: Inco
                 marginBottom: '8px'
               }}>
                 <div style={{
-                  width: totalPlatformRevenue > 0 ? ((platform.revenue / totalPlatformRevenue) * 100) + '%' : '0%',
+                  width: dashboardData.totalRevenue > 0 ? ((platform.revenue / dashboardData.totalRevenue) * 100) + '%' : '0%',
                   height: '100%',
                   background: '#c9a574',
                   borderRadius: '4px',

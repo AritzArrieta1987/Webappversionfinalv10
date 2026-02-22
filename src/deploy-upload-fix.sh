@@ -1,29 +1,16 @@
 #!/bin/bash
 
-echo "🚀 =================================================="
-echo "🚀 DESPLEGANDO CORRECCIÓN DE UPLOAD CSV"
-echo "🚀 =================================================="
-echo ""
+echo "🚀 Desplegando corrección de UploadPage al servidor..."
 
-cd /var/www/bigartist || exit 1
+# Subir archivo corregido
+scp /pages/UploadPage.tsx root@94.143.141.241:/var/www/bigartist/src/pages/UploadPage.tsx
 
-echo "📦 Compilando frontend..."
+# Compilar en el servidor
+ssh root@94.143.141.241 << 'ENDSSH'
+cd /var/www/bigartist
 npm run build
+echo "✅ Build completado"
+ls -lah /var/www/bigartist/build/assets/index-*.js
+ENDSSH
 
-if [ $? -eq 0 ]; then
-  echo ""
-  echo "✅ =================================================="
-  echo "✅ DESPLIEGUE EXITOSO"
-  echo "✅ =================================================="
-  echo ""
-  echo "🌐 Abre: https://app.bigartist.es"
-  echo "🔄 Presiona: Ctrl+Shift+R para recargar sin caché"
-  echo "📁 Ve a: Subir CSV"
-  echo "✅ Ahora podrás subir archivos CSV correctamente"
-  echo ""
-  echo "=================================================="
-else
-  echo ""
-  echo "❌ Error al compilar. Revisa los errores arriba."
-  exit 1
-fi
+echo "✅ Despliegue completado. Prueba en https://app.bigartist.es"

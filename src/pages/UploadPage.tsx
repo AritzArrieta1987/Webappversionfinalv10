@@ -5,6 +5,8 @@ interface CSVRow {
   [key: string]: string;
 }
 
+const API_URL = 'https://app.bigartist.es';
+
 export function UploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -16,18 +18,36 @@ export function UploadPage() {
   const [releaseDate, setReleaseDate] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isMountedRef = useRef(true); // ✅ Track si el componente está montado
+  const isMountedRef = useRef(true);
 
   // Cleanup al desmontar
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
-      isMountedRef.current = false; // ✅ Marcar como desmontado
+      isMountedRef.current = false;
       if (processingTimeoutRef.current) {
         clearTimeout(processingTimeoutRef.current);
       }
     };
   }, []);
+
+  // Función helper para obtener el token JWT
+  const getAuthToken = () => {
+    return localStorage.getItem('authToken') || '';
+  };
+
+  // Función helper para hacer fetch con autenticación
+  const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
+    const token = getAuthToken();
+    return fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...options.headers,
+      },
+    });
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -75,7 +95,6 @@ export function UploadPage() {
     console.log('🔍 PARSEANDO CSV...');
     console.log('📄 Primeros 500 caracteres:', text.substring(0, 500));
     
-    // Detectar el separador (puede ser coma, tabulación o punto y coma)
     const firstLine = text.split('\n')[0];
     let separator = ',';
     if (firstLine.includes('\t')) {
@@ -97,23 +116,20 @@ export function UploadPage() {
       return;
     }
 
-    // Obtener headers
     const headerLine = lines[0];
     const parsedHeaders = headerLine.split(separator).map(h => h.trim().replace(/^"|"$/g, ''));
     console.log('📋 Headers encontrados:', parsedHeaders);
     setHeaders(parsedHeaders);
 
-    // Parsear datos
     const data: CSVRow[] = [];
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i];
-      if (!line.trim()) continue; // Saltar líneas vacías
+      if (!line.trim()) continue;
       
       const values: string[] = [];
       let currentValue = '';
       let insideQuotes = false;
 
-      // Parser avanzado para manejar campos con comas dentro de comillas
       for (let j = 0; j < line.length; j++) {
         const char = line[j];
         
@@ -126,7 +142,7 @@ export function UploadPage() {
           currentValue += char;
         }
       }
-      values.push(currentValue.trim().replace(/^"|"$/g, '')); // Último valor
+      values.push(currentValue.trim().replace(/^"|"$/g, ''));
 
       const row: CSVRow = {};
       parsedHeaders.forEach((header, index) => {
@@ -134,7 +150,6 @@ export function UploadPage() {
       });
       data.push(row);
       
-      // Log de las primeras 2 filas
       if (i <= 2) {
         console.log(`🔍 Fila ${i}:`, row);
       }
@@ -148,592 +163,46 @@ export function UploadPage() {
     if (!file || csvData.length === 0) return;
 
     setIsProcessing(true);
+    setErrorMessage('');
 
-    // Limpiar timeout anterior si existe
-    if (processingTimeoutRef.current) {
-      clearTimeout(processingTimeoutRef.current);
-    }
+    try {
+      console.log('📤 Iniciando carga de CSV al backend...');
+      console.log('📊 Total de filas:', csvData.length);
 
-    // Simular procesamiento (en producción, aquí harías la llamada a la API)
-    processingTimeoutRef.current = setTimeout(() => {
-      // ✅ Verificar que el componente sigue montado antes de actualizar estado
-      if (!isMountedRef.current) {
-        console.log('⚠️ Componente desmontado, cancelando actualización de estado');
-        return;
+      // ✅ NUEVO: Enviar directamente al endpoint /api/csv-uploads con la estructura correcta
+      const response = await authenticatedFetch(`${API_URL}/api/csv-uploads`, {
+        method: 'POST',
+        body: JSON.stringify({
+          filename: file.name,
+          csv_data: csvData  // ✅ Enviar el array parseado directamente
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Error al procesar el CSV');
       }
 
-      // ✅ LEER DATOS ANTERIORES PARA ACUMULAR
-      console.log('📥 Leyendo datos anteriores para acumular...');
-      const previousStats = JSON.parse(localStorage.getItem('dashboardStats') || 'null');
-      const previousRoyalties = JSON.parse(localStorage.getItem('royaltiesData') || '[]');
-      const previousArtists = JSON.parse(localStorage.getItem('artists') || '[]');
-      const previousCSVs = JSON.parse(localStorage.getItem('uploadedCSVs') || '[]');
-      
-      // Procesar datos de The Orchard del nuevo CSV
-      const processedData = processTheOrchardData(csvData, releaseDate);
-      
-      // 🔄 COMBINAR CON DATOS ANTERIORES
-      let combinedStats = processedData.stats;
-      let combinedRoyalties = processedData.royalties;
-      let combinedArtists = processedData.artists;
-      
-      if (previousStats) {
-        console.log('🔄 Combinando con datos anteriores...');
-        console.log('📊 Stats anteriores:', previousStats.totalRevenue);
-        console.log('📊 Stats nuevas:', processedData.stats.totalRevenue);
-        
-        // Combinar totales
-        combinedStats = {
-          totalRevenue: (previousStats.totalRevenue || 0) + processedData.stats.totalRevenue,
-          totalStreams: (previousStats.totalStreams || 0) + processedData.stats.totalStreams,
-          totalArtists: 0, // Se calculará después
-          totalTracks: 0, // Se calculará después
-          platforms: [],
-          territories: [],
-          periods: [],
-          topArtists: []
-        };
-        
-        // Combinar plataformas
-        const platformsMap = new Map();
-        [...(previousStats.platforms || []), ...processedData.stats.platforms].forEach((p: any) => {
-          platformsMap.set(p.name, (platformsMap.get(p.name) || 0) + p.revenue);
-        });
-        combinedStats.platforms = Array.from(platformsMap.entries())
-          .map(([name, revenue]) => ({ name, revenue }))
-          .sort((a, b) => b.revenue - a.revenue);
-        
-        // Combinar territorios
-        const territoriesMap = new Map();
-        [...(previousStats.territories || []), ...processedData.stats.territories].forEach((t: any) => {
-          territoriesMap.set(t.name, (territoriesMap.get(t.name) || 0) + t.revenue);
-        });
-        combinedStats.territories = Array.from(territoriesMap.entries())
-          .map(([name, revenue]) => ({ name, revenue }))
-          .sort((a, b) => b.revenue - a.revenue);
-        
-        // Combinar períodos
-        const periodsMap = new Map();
-        [...(previousStats.periods || []), ...processedData.stats.periods].forEach((p: any) => {
-          periodsMap.set(p.period, (periodsMap.get(p.period) || 0) + p.revenue);
-        });
-        combinedStats.periods = Array.from(periodsMap.entries())
-          .map(([period, revenue]) => ({ period, revenue }))
-          .sort((a, b) => a.period.localeCompare(b.period));
-        
-        // Combinar artistas por nombre
-        const artistsMap = new Map();
-        
-        // Agregar artistas anteriores con todos sus datos
-        previousRoyalties.forEach((royalty: any) => {
-          // Buscar el artista completo en previousArtists
-          const fullArtistData = previousArtists.find((a: any) => a.name === royalty.artistName);
-          
-          artistsMap.set(royalty.artistName, {
-            name: royalty.artistName,
-            totalRevenue: royalty.totalRevenue,
-            totalStreams: royalty.totalStreams,
-            tracks: fullArtistData?.csvData?.tracks || [],
-            platforms: fullArtistData?.csvData?.platforms || [],
-            territories: fullArtistData?.csvData?.territories || [],
-            periods: fullArtistData?.csvData?.periods || []
-          });
-        });
-        
-        // Agregar/combinar artistas nuevos
-        processedData.artists.forEach((artist: any) => {
-          if (artistsMap.has(artist.name)) {
-            const existing = artistsMap.get(artist.name);
-            existing.totalRevenue += artist.totalRevenue;
-            existing.totalStreams += artist.totalStreams;
-            
-            // 🔄 COMBINAR TRACKS (sin duplicados por nombre)
-            const tracksMap = new Map();
-            existing.tracks.forEach((t: any) => tracksMap.set(t.name, t));
-            artist.tracks.forEach((t: any) => {
-              if (tracksMap.has(t.name)) {
-                // Si ya existe, sumar revenue y streams
-                const existingTrack = tracksMap.get(t.name);
-                existingTrack.revenue += t.revenue;
-                existingTrack.streams += t.streams;
-                // Combinar plataformas del track
-                const platformsMap = new Map();
-                existingTrack.platforms.forEach((p: any) => platformsMap.set(p.name, p));
-                t.platforms.forEach((p: any) => {
-                  if (platformsMap.has(p.name)) {
-                    const existingPlatform = platformsMap.get(p.name);
-                    existingPlatform.revenue += p.revenue;
-                    existingPlatform.streams += p.streams;
-                    existingPlatform.details = [...(existingPlatform.details || []), ...(p.details || [])];
-                  } else {
-                    platformsMap.set(p.name, p);
-                  }
-                });
-                existingTrack.platforms = Array.from(platformsMap.values());
-              } else {
-                tracksMap.set(t.name, t);
-              }
-            });
-            existing.tracks = Array.from(tracksMap.values());
-            
-            // 🔄 COMBINAR PLATAFORMAS
-            const platformsMap = new Map();
-            existing.platforms.forEach((p: any) => platformsMap.set(p.name, { name: p.name, revenue: p.revenue }));
-            artist.platforms.forEach((p: any) => {
-              if (platformsMap.has(p.name)) {
-                platformsMap.get(p.name).revenue += p.revenue;
-              } else {
-                platformsMap.set(p.name, { name: p.name, revenue: p.revenue });
-              }
-            });
-            existing.platforms = Array.from(platformsMap.values());
-            
-            // 🔄 COMBINAR TERRITORIOS
-            const territoriesMap = new Map();
-            existing.territories.forEach((t: any) => territoriesMap.set(t.name, { name: t.name, revenue: t.revenue }));
-            artist.territories.forEach((t: any) => {
-              if (territoriesMap.has(t.name)) {
-                territoriesMap.get(t.name).revenue += t.revenue;
-              } else {
-                territoriesMap.set(t.name, { name: t.name, revenue: t.revenue });
-              }
-            });
-            existing.territories = Array.from(territoriesMap.values());
-            
-            // 🔄 COMBINAR PERÍODOS
-            const periodsMap = new Map();
-            existing.periods.forEach((p: any) => periodsMap.set(p.period, { period: p.period, revenue: p.revenue }));
-            artist.periods.forEach((p: any) => {
-              if (periodsMap.has(p.period)) {
-                periodsMap.get(p.period).revenue += p.revenue;
-              } else {
-                periodsMap.set(p.period, { period: p.period, revenue: p.revenue });
-              }
-            });
-            existing.periods = Array.from(periodsMap.values());
-          } else {
-            artistsMap.set(artist.name, {
-              name: artist.name,
-              totalRevenue: artist.totalRevenue,
-              totalStreams: artist.totalStreams,
-              tracks: artist.tracks || [],
-              platforms: artist.platforms || [],
-              territories: artist.territories || [],
-              periods: artist.periods || []
-            });
-          }
-        });
-        
-        combinedArtists = Array.from(artistsMap.values());
-        
-        // Recalcular royalties
-        combinedRoyalties = combinedArtists.map(artist => {
-          const royaltyPercentage = 0.50;
-          const artistRoyalty = artist.totalRevenue * royaltyPercentage;
-          const labelShare = artist.totalRevenue * (1 - royaltyPercentage);
-          
-          return {
-            artistName: artist.name,
-            totalRevenue: artist.totalRevenue,
-            totalStreams: artist.totalStreams,
-            royaltyPercentage: royaltyPercentage * 100,
-            artistRoyalty: artistRoyalty,
-            labelShare: labelShare,
-            trackCount: artist.tracks.length,
-            topTrack: artist.tracks.length > 0 
-              ? [...artist.tracks].sort((a, b) => b.revenue - a.revenue)[0] 
-              : null,
-            platforms: artist.platforms,
-            periods: artist.periods
-          };
-        }).sort((a, b) => b.totalRevenue - a.totalRevenue);
-        
-        // Actualizar topArtists
-        combinedStats.topArtists = [...combinedArtists]
-          .sort((a, b) => b.totalRevenue - a.totalRevenue)
-          .slice(0, 10);
-        
-        combinedStats.totalArtists = combinedArtists.length;
-        combinedStats.totalTracks = combinedArtists.reduce((sum, a) => sum + (a.tracks?.length || 0), 0);
-        
-        console.log('✅ Datos combinados:');
-        console.log('💰 Total Revenue:', combinedStats.totalRevenue);
-        console.log('👥 Total Artistas:', combinedStats.totalArtists);
-      }
-      
-      // Guardar el CSV procesado
-      const uploadedFile = {
-        id: Date.now(),
-        fileName: file.name,
-        fileSize: file.size,
-        uploadDate: new Date().toISOString(),
-        rowCount: csvData.length,
-        headers: headers,
-        data: csvData,
-        processedData: processedData,
-        status: 'processed'
-      };
+      console.log('✅ CSV procesado correctamente:', result.message);
 
-      // ✅ AGREGAR a la lista de CSVs (no reemplazar)
-      const allCSVs = [...previousCSVs, uploadedFile];
-      localStorage.setItem('uploadedCSVs', JSON.stringify(allCSVs));
-
-      // Guardar estadísticas combinadas para el dashboard
-      localStorage.setItem('dashboardStats', JSON.stringify(combinedStats));
-      localStorage.setItem('royaltiesData', JSON.stringify(combinedRoyalties));
-
-      // ✅ ACTUALIZAR ARTISTAS con datos combinados
-      const updatedArtists = combinedArtists.map((csvArtist, index) => {
-        // Buscar si el artista ya existe
-        const existingArtist = previousArtists.find((a: any) => a.name === csvArtist.name);
-        
-        const artistData = {
-          id: existingArtist?.id || (previousArtists.length + index + 1),
-          name: csvArtist.name,
-          email: existingArtist?.email || `${csvArtist.name.toLowerCase().replace(/\s+/g, '.')}@artist.com`,
-          phone: existingArtist?.phone || '+34 600 000 000',
-          photo: existingArtist?.photo || '',
-          contractType: existingArtist?.contractType || '360',
-          contractPercentage: existingArtist?.contractPercentage || 50,
-          status: existingArtist?.status || 'active',
-          joinDate: existingArtist?.joinDate || new Date().toISOString(),
-          // ✅ DATOS ACUMULADOS
-          totalRevenue: csvArtist.totalRevenue,
-          totalStreams: csvArtist.totalStreams,
-          csvData: {
-            name: csvArtist.name,
-            totalRevenue: csvArtist.totalRevenue,
-            totalStreams: csvArtist.totalStreams,
-            tracks: csvArtist.tracks || [],
-            platforms: csvArtist.platforms || [],
-            territories: csvArtist.territories || [],
-            periods: csvArtist.periods || []
-          }
-        };
-        
-        // Log detallado del primer artista
-        if (index === 0) {
-          console.log('🔍 DEBUG - Primer artista guardado:', {
-            name: artistData.name,
-            totalRevenue: artistData.totalRevenue,
-            totalStreams: artistData.totalStreams,
-            tracks: artistData.csvData.tracks.length,
-            platforms: artistData.csvData.platforms.length,
-            territories: artistData.csvData.territories.length,
-            periods: artistData.csvData.periods.length
-          });
-        }
-        
-        return artistData;
-      });
-      
-      localStorage.setItem('artists', JSON.stringify(updatedArtists));
-      console.log('✅ Artistas actualizados:', updatedArtists.length);
-      console.log('📊 Resumen por artista:');
-      updatedArtists.forEach((a: any) => {
-        console.log(`  - ${a.name}: €${a.totalRevenue.toFixed(2)}, ${a.csvData.tracks.length} tracks`);
-      });
-      console.log('💰 CSVs acumulados:', allCSVs.length);
-
-      // 🔔 Disparar evento personalizado para notificar a otros componentes
+      // 🔔 Disparar evento personalizado para actualizar el dashboard
       window.dispatchEvent(new Event('csvUploaded'));
       console.log('🔔 Evento csvUploaded disparado');
 
-      // ✅ SOLO actualizar estado si el componente sigue montado
       if (isMountedRef.current) {
         setIsProcessing(false);
         setUploadStatus('success');
       }
-    }, 2000);
-  };
 
-  const processTheOrchardData = (data: CSVRow[], releaseDate: string) => {
-    console.log('🔍 PROCESANDO CSV - Primera fila para debug:', data[0]);
-    console.log('🔍 Columnas disponibles:', Object.keys(data[0]));
-    
-    // Función para parsear números europeos (con comas como decimales)
-    const parseEuropeanNumber = (value: string): number => {
-      if (!value || value.trim() === '') return 0;
-      
-      // Eliminar símbolos de moneda y espacios
-      let cleaned = value.replace(/[€$£\s]/g, '').trim();
-      
-      // Si tiene punto Y coma, asumir que punto es miles y coma es decimal (formato europeo)
-      if (cleaned.includes('.') && cleaned.includes(',')) {
-        cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    } catch (error) {
+      console.error('❌ Error al procesar CSV:', error);
+      if (isMountedRef.current) {
+        setErrorMessage(error instanceof Error ? error.message : 'Error al procesar el archivo');
+        setUploadStatus('error');
+        setIsProcessing(false);
       }
-      // Si solo tiene coma, asumir que es decimal europeo
-      else if (cleaned.includes(',') && !cleaned.includes('.')) {
-        cleaned = cleaned.replace(',', '.');
-      }
-      // Si solo tiene punto, ya está en formato correcto
-      
-      const parsed = parseFloat(cleaned);
-      return isNaN(parsed) ? 0 : parsed;
-    };
-    
-    // Agrupar por artista
-    const artistsMap = new Map<string, any>();
-    const platformsMap = new Map<string, number>();
-    const territoriesMap = new Map<string, number>();
-    const periodsMap = new Map<string, number>();
-    
-    let totalRevenue = 0;
-    let totalStreams = 0;
-
-    // Función helper para buscar valores - MUY FLEXIBLE
-    const getValue = (row: CSVRow, possibleNames: string[]): string => {
-      // Crear mapa de columnas normalizadas
-      const columnMap = new Map<string, string>();
-      Object.keys(row).forEach(key => {
-        const normalized = key.toLowerCase().trim().replace(/\s+/g, ' ');
-        columnMap.set(normalized, key);
-      });
-      
-      // Buscar entre todos los nombres posibles
-      for (const name of possibleNames) {
-        const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
-        const actualKey = columnMap.get(normalized);
-        if (actualKey && row[actualKey] !== undefined && row[actualKey] !== '') {
-          return String(row[actualKey]).trim();
-        }
-      }
-      
-      return '';
-    };
-
-    data.forEach((row, index) => {
-      // Usar nombres flexibles para las columnas
-      const artistName = getValue(row, [
-        'Artist Name', 'Artist', 'artist name', 'artist', 'ARTIST NAME', 'ARTIST',
-        'Nombre Artista', 'Artista'
-      ]);
-      
-      const trackName = getValue(row, [
-        'Track Name', 'Track', 'Song', 'track name', 'song', 'TRACK NAME', 'TRACK',
-        'Nombre Canción', 'Canción'
-      ]);
-      
-      const platform = getValue(row, [
-        'DMS', 'Platform', 'Store', 'dms', 'platform', 'store'
-      ]);
-      
-      const territory = getValue(row, [
-        'Territory', 'Country', 'territory', 'country', 'TERRITORY', 'COUNTRY',
-        'Territorio', 'País'
-      ]);
-      
-      const period = getValue(row, [
-        'Period', 'Activity Period', 'Date', 'period', 'activity period', 'date', 'PERIOD',
-        'Período', 'Periodo', 'Fecha'
-      ]);
-      
-      const quantityStr = getValue(row, [
-        'Quantity', 'Streams', 'Units', 'quantity', 'streams', 'units', 'QUANTITY',
-        'Cantidad', 'Reproducciones'
-      ]);
-      
-      const revenueStr = getValue(row, [
-        'Label Share Net Receipts', 'Revenue', 'Amount', 'Net Receipts', 
-        'label share net receipts', 'revenue', 'amount', 'net receipts',
-        'LABEL SHARE NET RECEIPTS', 'REVENUE', 'Ingresos', 'Importe'
-      ]);
-      
-      const releaseName = getValue(row, [
-        'Release Name', 'Album', 'Release', 'release name', 'album', 'RELEASE NAME', 'ALBUM',
-        'Nombre Release', 'Álbum'
-      ]);
-      
-      const isrc = getValue(row, [
-        'ISRC', 'isrc'
-      ]);
-      
-      const transType = getValue(row, [
-        'Trans Type', 'Transaction Type', 'Type', 'trans type', 'TRANS TYPE',
-        'Tipo Transacción', 'Tipo'
-      ]);
-      
-      const currency = getValue(row, [
-        'Preferred Currency', 'Currency', 'preferred currency', 'currency', 'CURRENCY',
-        'Moneda'
-      ]);
-
-      // Solo procesar si tenemos al menos artista
-      if (!artistName) {
-        if (index < 5) console.warn(`⚠️ Fila ${index} sin nombre de artista, ignorando...`);
-        return;
-      }
-
-      // PARSEAR NÚMEROS EN FORMATO EUROPEO
-      const quantity = parseEuropeanNumber(quantityStr);
-      const revenue = parseEuropeanNumber(revenueStr);
-
-      // Log para las primeras 3 filas
-      if (index < 3) {
-        console.log(`📊 Fila ${index}:`, {
-          artistName,
-          trackName,
-          platform,
-          territory,
-          period,
-          quantityStr,
-          quantity,
-          revenueStr,
-          revenue: revenue.toFixed(2)
-        });
-      }
-
-      // Acumular totales globales
-      totalRevenue += revenue;
-      totalStreams += quantity;
-
-      // Agrupar por plataforma
-      platformsMap.set(platform || 'Otras', (platformsMap.get(platform || 'Otras') || 0) + revenue);
-
-      // Agrupar por territorio
-      territoriesMap.set(territory || 'Otros', (territoriesMap.get(territory || 'Otros') || 0) + revenue);
-
-      // Agrupar por período
-      periodsMap.set(period || 'Sin Fecha', (periodsMap.get(period || 'Sin Fecha') || 0) + revenue);
-
-      // Agrupar por artista
-      if (!artistsMap.has(artistName)) {
-        artistsMap.set(artistName, {
-          name: artistName,
-          totalRevenue: 0,
-          totalStreams: 0,
-          tracks: new Map<string, any>(),
-          platforms: new Map<string, number>(),
-          territories: new Map<string, number>(),
-          periods: new Map<string, number>()
-        });
-      }
-
-      const artist = artistsMap.get(artistName);
-      artist.totalRevenue += revenue;
-      artist.totalStreams += quantity;
-
-      // Agrupar por track dentro del artista
-      const trackKey = trackName || 'Sin Título';
-      if (!artist.tracks.has(trackKey)) {
-        artist.tracks.set(trackKey, {
-          name: trackKey,
-          release: releaseName || 'Sin Release',
-          isrc: isrc || '',
-          releaseDate: releaseDate || '',
-          revenue: 0,
-          streams: 0,
-          platforms: new Map<string, any>()
-        });
-      }
-
-      const track = artist.tracks.get(trackKey);
-      track.revenue += revenue;
-      track.streams += quantity;
-
-      // Datos por plataforma dentro del track
-      const platformKey = platform || 'Otras';
-      if (!track.platforms.has(platformKey)) {
-        track.platforms.set(platformKey, {
-          revenue: 0,
-          streams: 0,
-          details: []
-        });
-      }
-
-      const trackPlatform = track.platforms.get(platformKey);
-      trackPlatform.revenue += revenue;
-      trackPlatform.streams += quantity;
-      trackPlatform.details.push({
-        period: period || 'Sin Fecha',
-        territory: territory || 'Otros',
-        quantity,
-        revenue,
-        transType,
-        currency
-      });
-
-      // Plataformas del artista
-      artist.platforms.set(platformKey, (artist.platforms.get(platformKey) || 0) + revenue);
-      artist.territories.set(territory || 'Otros', (artist.territories.get(territory || 'Otros') || 0) + revenue);
-      artist.periods.set(period || 'Sin Fecha', (artist.periods.get(period || 'Sin Fecha') || 0) + revenue);
-    });
-
-    console.log('✅ PROCESAMIENTO COMPLETADO');
-    console.log('📊 Artistas encontrados:', Array.from(artistsMap.keys()));
-    console.log('💰 Total Revenue:', totalRevenue.toFixed(2), '€');
-    console.log('🎵 Total Streams:', totalStreams.toLocaleString('es-ES'));
-
-    // Convertir Maps a Arrays
-    const artists = Array.from(artistsMap.values()).map(artist => ({
-      ...artist,
-      tracks: Array.from(artist.tracks.values()).map(track => ({
-        ...track,
-        platforms: Array.from(track.platforms.entries()).map(([name, data]) => ({
-          name,
-          ...data
-        }))
-      })),
-      platforms: Array.from(artist.platforms.entries()).map(([name, revenue]) => ({
-        name,
-        revenue
-      })),
-      territories: Array.from(artist.territories.entries()).map(([name, revenue]) => ({
-        name,
-        revenue
-      })),
-      periods: Array.from(artist.periods.entries()).map(([period, revenue]) => ({
-        period,
-        revenue
-      }))
-    }));
-
-    const platforms = Array.from(platformsMap.entries())
-      .map(([name, revenue]) => ({ name, revenue }))
-      .sort((a, b) => b.revenue - a.revenue);
-
-    const territories = Array.from(territoriesMap.entries())
-      .map(([name, revenue]) => ({ name, revenue }))
-      .sort((a, b) => b.revenue - a.revenue);
-
-    const periods = Array.from(periodsMap.entries())
-      .map(([period, revenue]) => ({ period, revenue }))
-      .sort((a, b) => a.period.localeCompare(b.period));
-
-    // Calcular royalties por artista (asumiendo 50% por defecto)
-    const royalties = artists.map(artist => {
-      const royaltyPercentage = 0.50; // 50% por defecto
-      const artistRoyalty = artist.totalRevenue * royaltyPercentage;
-      const labelShare = artist.totalRevenue * (1 - royaltyPercentage);
-
-      return {
-        artistName: artist.name,
-        totalRevenue: artist.totalRevenue,
-        totalStreams: artist.totalStreams,
-        royaltyPercentage: royaltyPercentage * 100,
-        artistRoyalty: artistRoyalty,
-        labelShare: labelShare,
-        trackCount: artist.tracks.length,
-        topTrack: artist.tracks.sort((a, b) => b.revenue - a.revenue)[0],
-        platforms: artist.platforms,
-        periods: artist.periods
-      };
-    }).sort((a, b) => b.totalRevenue - a.totalRevenue);
-
-    return {
-      stats: {
-        totalRevenue,
-        totalStreams,
-        totalArtists: artists.length,
-        totalTracks: artists.reduce((sum, a) => sum + a.tracks.length, 0),
-        platforms,
-        territories,
-        periods,
-        topArtists: [...artists].sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 10)
-      },
-      royalties,
-      artists
-    };
+    }
   };
 
   const handleReset = () => {
@@ -742,35 +211,16 @@ export function UploadPage() {
     setHeaders([]);
     setUploadStatus('idle');
     setErrorMessage('');
+    setReleaseDate('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  };
-
   return (
-    <div>
-      {/* Header */}
+    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
       <div style={{ marginBottom: '32px' }}>
-        <h1
-          style={{
-            fontSize: '32px',
-            fontWeight: '700',
-            color: '#ffffff',
-            marginBottom: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
-          <Upload size={32} color="#c9a574" />
+        <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
           Subir Archivo CSV
         </h1>
         <p style={{ fontSize: '14px', color: '#AFB3B7' }}>
@@ -778,26 +228,23 @@ export function UploadPage() {
         </p>
       </div>
 
-      {/* Zona de carga */}
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
         style={{
-          background: isDragging
-            ? 'linear-gradient(135deg, rgba(201, 165, 116, 0.2) 0%, rgba(201, 165, 116, 0.1) 100%)'
-            : 'linear-gradient(135deg, rgba(42, 63, 63, 0.4) 0%, rgba(30, 47, 47, 0.6) 100%)',
-          border: isDragging
-            ? '2px dashed #c9a574'
-            : '2px dashed rgba(201, 165, 116, 0.3)',
-          borderRadius: '20px',
+          border: `2px dashed ${isDragging ? '#c9a574' : 'rgba(201, 165, 116, 0.3)'}`,
+          borderRadius: '16px',
           padding: '48px',
           textAlign: 'center',
-          cursor: 'pointer',
+          background: isDragging
+            ? 'rgba(201, 165, 116, 0.1)'
+            : 'linear-gradient(135deg, rgba(42, 63, 63, 0.6) 0%, rgba(30, 47, 47, 0.8) 100%)',
           transition: 'all 0.3s ease',
-          marginBottom: '32px',
+          cursor: 'pointer',
+          marginBottom: '24px',
         }}
+        onClick={() => fileInputRef.current?.click()}
       >
         <input
           ref={fileInputRef}
@@ -809,149 +256,89 @@ export function UploadPage() {
 
         <div
           style={{
-            width: '80px',
-            height: '80px',
-            borderRadius: '50%',
-            background: 'rgba(201, 165, 116, 0.1)',
+            width: '64px',
+            height: '64px',
+            background: 'linear-gradient(135deg, #c9a574 0%, #a68a5e 100%)',
+            borderRadius: '16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            margin: '0 auto 24px',
+            margin: '0 auto 20px',
+            boxShadow: '0 4px 12px rgba(201, 165, 116, 0.3)',
           }}
         >
-          <Upload size={40} color="#c9a574" />
+          <Upload size={32} color="#ffffff" />
         </div>
 
-        <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#ffffff', marginBottom: '12px' }}>
-          {file ? file.name : 'Arrastra tu archivo CSV aquí'}
-        </h2>
-
-        <p style={{ fontSize: '16px', color: '#AFB3B7', marginBottom: '16px' }}>
-          {file
-            ? `${formatFileSize(file.size)} • ${csvData.length} filas`
-            : 'o haz clic para seleccionar un archivo'}
+        <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', marginBottom: '8px' }}>
+          {isDragging ? 'Suelta el archivo aquí' : 'Arrastra y suelta tu archivo CSV'}
+        </h3>
+        <p style={{ fontSize: '14px', color: '#AFB3B7', marginBottom: '16px' }}>
+          o haz clic para seleccionar un archivo
         </p>
-
-        {!file && (
-          <div
-            style={{
-              display: 'inline-block',
-              padding: '12px 24px',
-              background: 'linear-gradient(135deg, #c9a574 0%, #a68a5e 100%)',
-              borderRadius: '10px',
-              color: '#ffffff',
-              fontSize: '14px',
-              fontWeight: '600',
-              marginTop: '8px',
-            }}
-          >
-            Seleccionar Archivo
-          </div>
-        )}
+        <p style={{ fontSize: '12px', color: '#6B7280' }}>
+          Formatos soportados: CSV (máx. 10 MB)
+        </p>
       </div>
 
-      {/* Información del archivo */}
-      {file && csvData.length > 0 && (
+      {file && (
         <div
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            padding: '16px 20px',
             background: 'linear-gradient(135deg, rgba(42, 63, 63, 0.6) 0%, rgba(30, 47, 47, 0.8) 100%)',
             border: '1px solid rgba(201, 165, 116, 0.3)',
-            borderRadius: '16px',
-            padding: '24px',
-            marginBottom: '32px',
+            borderRadius: '12px',
+            marginBottom: '24px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              background: 'rgba(201, 165, 116, 0.2)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
             <FileText size={24} color="#c9a574" />
-            <div>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#ffffff', marginBottom: '4px' }}>
-                Archivo cargado correctamente
-              </h3>
-              <p style={{ fontSize: '14px', color: '#AFB3B7' }}>
-                {csvData.length} registros encontrados • {headers.length} columnas
-              </p>
-            </div>
           </div>
-
-          {/* Preview de columnas */}
-          <div style={{ marginBottom: '20px' }}>
-            <p style={{ fontSize: '14px', color: '#c9a574', fontWeight: '600', marginBottom: '12px' }}>
-              Columnas detectadas:
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff', marginBottom: '4px' }}>
+              {file.name}
             </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {headers.map((header, index) => (
-                <div
-                  key={index}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'rgba(201, 165, 116, 0.1)',
-                    border: '1px solid rgba(201, 165, 116, 0.3)',
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    color: '#ffffff',
-                  }}
-                >
-                  {header}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Preview de datos */}
-          <div>
-            <p style={{ fontSize: '14px', color: '#c9a574', fontWeight: '600', marginBottom: '12px' }}>
-              Vista previa (primeras 3 filas):
+            <p style={{ fontSize: '13px', color: '#AFB3B7' }}>
+              {(file.size / 1024).toFixed(2)} KB • {csvData.length} filas detectadas
             </p>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    {headers.map((header, index) => (
-                      <th
-                        key={index}
-                        style={{
-                          padding: '12px',
-                          background: 'rgba(201, 165, 116, 0.1)',
-                          borderBottom: '2px solid rgba(201, 165, 116, 0.3)',
-                          fontSize: '13px',
-                          fontWeight: '700',
-                          color: '#c9a574',
-                          textAlign: 'left',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {csvData.slice(0, 3).map((row, rowIndex) => (
-                    <tr key={rowIndex}>
-                      {headers.map((header, colIndex) => (
-                        <td
-                          key={colIndex}
-                          style={{
-                            padding: '12px',
-                            borderBottom: '1px solid rgba(201, 165, 116, 0.1)',
-                            fontSize: '13px',
-                            color: '#ffffff',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {row[header]}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
+          {uploadStatus !== 'success' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReset();
+              }}
+              style={{
+                padding: '8px',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#AFB3B7',
+                transition: 'color 0.2s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#AFB3B7')}
+            >
+              <X size={20} />
+            </button>
+          )}
         </div>
       )}
 
-      {/* Mensajes de estado */}
       {uploadStatus === 'success' && (
         <div
           style={{
@@ -971,7 +358,7 @@ export function UploadPage() {
               Archivo procesado exitosamente
             </p>
             <p style={{ fontSize: '13px', color: '#AFB3B7' }}>
-              Los royalties han sido calculados y están listos para revisión
+              Los royalties han sido calculados y guardados en la base de datos
             </p>
           </div>
         </div>
@@ -1002,10 +389,8 @@ export function UploadPage() {
         </div>
       )}
 
-      {/* Botones de acción */}
       {file && csvData.length > 0 && (
         <>
-          {/* Campo de fecha de lanzamiento */}
           <div style={{
             background: 'linear-gradient(135deg, rgba(42, 63, 63, 0.6) 0%, rgba(30, 47, 47, 0.8) 100%)',
             border: '1px solid rgba(201, 165, 116, 0.3)',
@@ -1133,7 +518,6 @@ export function UploadPage() {
         </>
       )}
 
-      {/* Información adicional */}
       <div
         style={{
           marginTop: '32px',
